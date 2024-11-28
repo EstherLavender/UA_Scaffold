@@ -1,18 +1,55 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PaginationButton, SearchBar, TransactionsTable } from "./_components";
+import { PaginationButton, SearchBar } from "./_components";
 import type { NextPage } from "next";
 import { hardhat } from "viem/chains";
-import { useFetchBlocks } from "~~/hooks/scaffold-eth";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { notification } from "~~/utils/scaffold-eth";
+import { useContractRead } from "wagmi";
+import { useDeployedContractInfo } from "~~/hooks/scaffold-eth";
 
-const BlockExplorer: NextPage = () => {
-  const { blocks, transactionReceipts, currentPage, totalBlocks, setCurrentPage, error } = useFetchBlocks();
+// New components for UrbanAgriDLP
+const ChallengesList = ({ challenges }: { challenges: any[] }) => (
+  <div>
+    <h2>Challenges</h2>
+    {challenges.map((challenge, index) => (
+      <div key={index}>
+        <h3>{challenge.description}</h3>
+        <p>Creator: {challenge.creator}</p>
+        <p>Solutions: {challenge.solutionCount.toString()}</p>
+      </div>
+    ))}
+  </div>
+);
+
+const UrbanAgriDLP: NextPage = () => {
   const { targetNetwork } = useTargetNetwork();
   const [isLocalNetwork, setIsLocalNetwork] = useState(true);
   const [hasError, setHasError] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [challenges, setChallenges] = useState<any[]>([]);
+
+  const { data: deployedContractData } = useDeployedContractInfo("UrbanAgriDLP");
+
+  const { data: challengeCount } = useContractRead({
+    address: deployedContractData?.address,
+    abi: deployedContractData?.abi,
+    functionName: "getChallengeCount",
+  });
+
+  const { data: challengeData } = useContractRead({
+    address: deployedContractData?.address,
+    abi: deployedContractData?.abi,
+    functionName: "getChallenge",
+    args: [currentPage],
+  });
+
+  useEffect(() => {
+    if (challengeData) {
+      setChallenges(prevChallenges => [...prevChallenges, challengeData]);
+    }
+  }, [challengeData]);
 
   useEffect(() => {
     if (targetNetwork.id !== hardhat.id) {
@@ -21,10 +58,10 @@ const BlockExplorer: NextPage = () => {
   }, [targetNetwork.id]);
 
   useEffect(() => {
-    if (targetNetwork.id === hardhat.id && error) {
+    if (targetNetwork.id === hardhat.id && hasError) {
       setHasError(true);
     }
-  }, [targetNetwork.id, error]);
+  }, [targetNetwork.id, hasError]);
 
   useEffect(() => {
     if (!isLocalNetwork) {
@@ -34,8 +71,8 @@ const BlockExplorer: NextPage = () => {
             <code className="italic bg-base-300 text-base font-bold"> targetNetwork </code> is not localhost
           </p>
           <p className="m-0">
-            - You are on <code className="italic bg-base-300 text-base font-bold">{targetNetwork.name}</code> .This
-            block explorer is only for <code className="italic bg-base-300 text-base font-bold">localhost</code>.
+            - You are on <code className="italic bg-base-300 text-base font-bold">{targetNetwork.name}</code>. This
+            explorer is only for <code className="italic bg-base-300 text-base font-bold">localhost</code>.
           </p>
           <p className="mt-1 break-normal">
             - You can use{" "}
@@ -73,11 +110,16 @@ const BlockExplorer: NextPage = () => {
 
   return (
     <div className="container mx-auto my-10">
+      <h1>Urban Agriculture DLP Explorer</h1>
       <SearchBar />
-      <TransactionsTable blocks={blocks} transactionReceipts={transactionReceipts} />
-      <PaginationButton currentPage={currentPage} totalItems={Number(totalBlocks)} setCurrentPage={setCurrentPage} />
+      <ChallengesList challenges={challenges} />
+      <PaginationButton
+        currentPage={currentPage}
+        totalItems={Number(challengeCount)}
+        setCurrentPage={setCurrentPage}
+      />
     </div>
   );
 };
 
-export default BlockExplorer;
+export default UrbanAgriDLP;
